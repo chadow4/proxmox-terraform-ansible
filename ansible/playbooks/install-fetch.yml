@@ -1,0 +1,79 @@
+---
+# =============================================================================
+# Playbook pour installer fastfetch ou neofetch sur toutes les machines
+# Usage: ansible-playbook playbooks/install-fetch.yml
+# =============================================================================
+
+- name: "🚀 Installation de fastfetch ou neofetch"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Vérification de l'état actuel
+    # -------------------------------------------------------------------------
+    - name: "🔍 Vérification des paquets installés"
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: "📝 Vérification si fastfetch ou neofetch est déjà là"
+      ansible.builtin.set_fact:
+        fetch_already_installed: "{{ 'fastfetch' in ansible_facts.packages or 'neofetch' in ansible_facts.packages }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Mise à jour des dépôts (seulement si nécessaire)
+    # -------------------------------------------------------------------------
+    - name: "🔄 Mise à jour du cache apt (Debian)"
+      ansible.builtin.apt:
+        update_cache: yes
+      when: 
+        - ansible_facts['os_family'] == "Debian"
+        - not fetch_already_installed
+
+    - name: "🔄 Mise à jour du cache dnf (Fedora)"
+      ansible.builtin.dnf:
+        update_cache: yes
+      when: 
+        - ansible_facts['os_family'] == "RedHat"
+        - not fetch_already_installed
+
+    # -------------------------------------------------------------------------
+    # 3. Tentative d'installation de fastfetch (priorité)
+    # -------------------------------------------------------------------------
+    - name: "📦 Installation de fastfetch"
+      ansible.builtin.package:
+        name: fastfetch
+        state: present
+      register: install_fastfetch
+      ignore_errors: true
+      when: not fetch_already_installed
+
+    # -------------------------------------------------------------------------
+    # 4. Fallback sur neofetch si fastfetch n'est pas disponible
+    # -------------------------------------------------------------------------
+    - name: "📦 Installation de neofetch (fallback)"
+      ansible.builtin.package:
+        name: neofetch
+        state: present
+      when: 
+        - not fetch_already_installed
+        - (install_fastfetch is failed or install_fastfetch is skipped)
+      register: install_neofetch
+
+    # -------------------------------------------------------------------------
+    # 5. Vérification et affichage final
+    # -------------------------------------------------------------------------
+    - name: "✅ Vérification de l'installation"
+      ansible.builtin.command: "{{ ('fastfetch' in ansible_facts.packages or (install_fastfetch is succeeded and install_fastfetch is not skipped)) | ternary('fastfetch', 'neofetch') }} --version"
+      register: fetch_version
+      changed_when: false
+      failed_when: false
+
+    - name: "🎉 Résumé"
+      ansible.builtin.debug:
+        msg:
+          - "Host       : {{ inventory_hostname }}"
+          - "Déjà présent: {{ fetch_already_installed | ternary('Oui', 'Non') }}"
+          - "Logiciel    : {{ ('fastfetch' in ansible_facts.packages or (install_fastfetch is succeeded and install_fastfetch is not skipped)) | ternary('fastfetch', 'neofetch') }}"
+          - "Version     : {{ fetch_version.stdout.split('\n')[0] | default('N/A') }}"

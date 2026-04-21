@@ -6,7 +6,7 @@ resource "proxmox_download_file" "fedora_cloud_image" {
   datastore_id = var.iso_storage
   node_name    = var.proxmox_node
 
-  # Fedora 41 Cloud Base (qcow2 renommé en img pour Proxmox)
+  # Fedora 43 Cloud Base (qcow2 renommé en img pour Proxmox)
   url       = "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
   file_name = "fedora-43-cloudbase.img"
 }
