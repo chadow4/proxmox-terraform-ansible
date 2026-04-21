@@ -1,0 +1,30 @@
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+
+# Secrets / tfvars locaux
+*.tfvars
+!*.tfvars.example
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI
+.terraformrc
+terraform.rc
+
+# Ansible
+*.retry
+ansible/inventory/hosts.ini
+
+# OS
+.DS_Store
+Thumbs.db

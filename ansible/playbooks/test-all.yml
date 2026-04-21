@@ -1,0 +1,153 @@
+---
+# =============================================================================
+# Playbook de vérification des LXC Debian et VM Fedora
+# Usage: ansible-playbook playbooks/test-all.yml
+# =============================================================================
+
+- name: "🔍 Test de connectivité et état de toutes les machines"
+  hosts: fedora,debian
+  gather_facts: true
+  become: false
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Test SSH (implicite - si gather_facts passe, c'est OK)
+    # -------------------------------------------------------------------------
+    - name: "✅ Connexion SSH réussie"
+      ansible.builtin.debug:
+        msg: "Connexion OK sur {{ inventory_hostname }} ({{ ansible_host }})"
+
+    # -------------------------------------------------------------------------
+    # 2. Infos système
+    # -------------------------------------------------------------------------
+    - name: "📋 Récupération infos système"
+      ansible.builtin.setup:
+        gather_subset:
+          - distribution
+          - kernel
+          - hardware
+          - virtual
+
+    - name: "🖥️  Affichage infos système"
+      ansible.builtin.debug:
+        msg:
+          - "Host     : {{ inventory_hostname }}"
+          - "IP       : {{ ansible_host }}"
+          - "Hostname : {{ ansible_facts['hostname'] }}"
+          - "OS       : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          - "Kernel   : {{ ansible_facts['kernel'] }}"
+          - "Virt     : {{ ansible_facts['virtualization_type'] | default('N/A') }} ({{ ansible_facts['virtualization_role'] | default('N/A') }})"
+          - "CPU      : {{ ansible_facts['processor_vcpus'] }} vCPU"
+          - "RAM      : {{ ansible_facts['memtotal_mb'] }} MB"
+
+    # -------------------------------------------------------------------------
+    # 3. Corriger et vérifier le hostname
+    # -------------------------------------------------------------------------
+    - name: "🏷️  Correction du hostname si nécessaire"
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"
+      when: ansible_facts['hostname'] != inventory_hostname
+      become: true
+
+    - name: "🏷️  Vérification du hostname"
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['hostname'] == inventory_hostname or inventory_hostname in ansible_facts['fqdn'] | default('')
+        fail_msg: "Hostname {{ ansible_facts['hostname'] }} ≠ attendu {{ inventory_hostname }}"
+        success_msg: "Hostname OK : {{ inventory_hostname }}"
+
+    # -------------------------------------------------------------------------
+    # 4. Vérifier l'IP configurée
+    # -------------------------------------------------------------------------
+    - name: "🌐 Vérification de l'IP"
+      ansible.builtin.assert:
+        that:
+          - ansible_host in ansible_facts['all_ipv4_addresses']
+        fail_msg: "L'IP {{ ansible_host }} n'est pas trouvée dans {{ ansible_facts['all_ipv4_addresses'] }}"
+        success_msg: "IP OK : {{ ansible_host }}"
+
+    # -------------------------------------------------------------------------
+    # 5. Vérifier que SSH root fonctionne (on est connecté, donc oui)
+    # -------------------------------------------------------------------------
+    - name: "🔑 Vérification user courant"
+      ansible.builtin.command: whoami
+      register: current_user
+      changed_when: false
+
+    - name: "🔑 Assertion user root"
+      ansible.builtin.assert:
+        that:
+          - current_user.stdout == "root"
+        fail_msg: "L'utilisateur courant n'est pas root : {{ current_user.stdout }}"
+        success_msg: "SSH root OK"
+
+    # -------------------------------------------------------------------------
+    # 6. Test connectivité réseau (ping gateway)
+    # -------------------------------------------------------------------------
+    - name: "📡 Ping gateway"
+      ansible.builtin.command: ping -c 2 -W 2 192.168.1.1
+      register: ping_gw
+      changed_when: false
+      failed_when: ping_gw.rc != 0
+
+    # -------------------------------------------------------------------------
+    # 7. Test résolution DNS
+    # -------------------------------------------------------------------------
+    - name: "🌍 Test résolution DNS"
+      ansible.builtin.command: getent hosts debian.org
+      register: dns_check
+      changed_when: false
+      failed_when: dns_check.rc != 0
+
+    # -------------------------------------------------------------------------
+    # 8. Espace disque
+    # -------------------------------------------------------------------------
+    - name: "💾 Espace disque /"
+      ansible.builtin.shell: |
+        set -o pipefail
+        df -h / | tail -1 | awk '{print "Used: "$3"/"$2" ("$5")"}'
+      args:
+        executable: /bin/bash
+      register: disk_usage
+      changed_when: false
+
+    - name: "💾 Affichage espace disque"
+      ansible.builtin.debug:
+        msg: "{{ disk_usage.stdout }}"
+
+    # -------------------------------------------------------------------------
+    # 9. Vérifier que le service SSH est actif
+    # -------------------------------------------------------------------------
+    - name: "🛡️  Vérifier que sshd est actif"
+      ansible.builtin.service_facts:
+
+    - name: "🛡️  Assertion sshd running"
+      ansible.builtin.assert:
+        that:
+          - "(ansible_facts.services['sshd.service'] | default({'state': 'stopped'})).state == 'running' or
+            (ansible_facts.services['ssh.service'] | default({'state': 'stopped'})).state == 'running'"
+        fail_msg: "sshd n'est pas actif"
+        success_msg: "sshd actif"
+
+    # -------------------------------------------------------------------------
+    # 10. Résumé final
+    # -------------------------------------------------------------------------
+    - name: "🎉 Machine validée"
+      ansible.builtin.debug:
+        msg: "✅ {{ inventory_hostname }} ({{ ansible_host }}) — Tous les tests OK"
+
+
+# =============================================================================
+# Play final : résumé global groupé
+# =============================================================================
+- name: "📊 Récapitulatif global"
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: "Affichage groupes LXC vs VM"
+      ansible.builtin.debug:
+        msg:
+          - "=== LXC Debian ==="
+          - "{{ groups['lxc_debian'] }}"
+          - "=== VM Fedora ==="
+          - "{{ groups['vm_fedora'] }}"
