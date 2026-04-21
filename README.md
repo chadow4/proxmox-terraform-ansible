@@ -1,5 +1,6 @@
 # Proxmox Lab — Terraform + Ansible
 
+
 Provisionne **3 LXC Fedora** + **2 VMs Fedora** sur Proxmox, puis les teste avec Ansible.
 
 **Proxmox configuré :** `https://192.168.1.38:8006/` (root / password)
@@ -13,6 +14,9 @@ Provisionne **3 LXC Fedora** + **2 VMs Fedora** sur Proxmox, puis les teste avec
 | LXC  | fedora-lxc-03  | 192.168.1.12    | 203  |
 | VM   | fedora-vm-01   | 192.168.1.20    | 301  |
 | VM   | fedora-vm-02   | 192.168.1.21    | 302  |
+
+
+<img width="1864" height="1022" alt="image" src="https://github.com/user-attachments/assets/dab9e507-083d-478c-a81c-cbce645feacc" />
 
 ## 📂 Structure
 
